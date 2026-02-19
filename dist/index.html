@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lane Defense – Epic War Web Edition</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #050d15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      color: #aaccff;
+    }
+    #game-container canvas {
+      display: block;
+      max-width: 100%;
+    }
+    #controls-hint {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #556677;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div id="controls-hint">
+    Keys: <b>1–5</b> spawn units &nbsp;|&nbsp;
+    <b>Q</b> Arrow Rain &nbsp;|&nbsp;
+    <b>E</b> Heal Allies &nbsp;|&nbsp;
+    <b>F</b> Fast-forward ×2 &nbsp;|&nbsp;
+    <b>Click</b> ground to move hero
+  </div>
+
+  <!-- Phaser 3 (CDN – no build step required) -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+
+  <!-- Paths are relative to dist/ so go up one level to reach src/ -->
+  <script src="../src/config/GlobalConfig.js"></script>
+  <script src="../src/managers/SaveManager.js"></script>
+  <script src="../src/scenes/MenuScene.js"></script>
+  <script src="../src/scenes/WorldMapScene.js"></script>
+  <script src="../src/scenes/LevelScene.js"></script>
+  <script src="../src/scenes/UpgradeScene.js"></script>
+  <script src="../src/main.js"></script>
+</body>
+</html>
