@@ -14,6 +14,109 @@
 // ── Unit state constants ──────────────────────────────────────────────────────
 const UnitState = { MOVING: 'MOVING', ATTACKING: 'ATTACKING', DEAD: 'DEAD' };
 
+const HERO_KNIGHT_TEXTURE = {
+  key: 'hero-knight-sheet',
+  frameWidth: 32,
+  frameHeight: 40,
+  frameCount: 6,
+  scale: 2,
+};
+
+function ensureHeroKnightTexture(scene) {
+  if (scene.textures.exists(HERO_KNIGHT_TEXTURE.key)) return;
+
+  const {
+    key,
+    frameWidth,
+    frameHeight,
+    frameCount,
+  } = HERO_KNIGHT_TEXTURE;
+
+  const texture = scene.textures.createCanvas(key, frameWidth * frameCount, frameHeight);
+  const ctx = texture.getContext();
+  ctx.imageSmoothingEnabled = false;
+
+  for (let frame = 0; frame < frameCount; frame++) {
+    drawHeroKnightFrame(ctx, frame * frameWidth, 0, frame);
+  }
+  texture.refresh();
+
+  const phaserTexture = scene.textures.get(key);
+  for (let frame = 0; frame < frameCount; frame++) {
+    phaserTexture.add(`f${frame}`, 0, frame * frameWidth, 0, frameWidth, frameHeight);
+  }
+}
+
+function drawHeroKnightFrame(ctx, ox, oy, frame) {
+  const px = (x, y, w, h, color) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(ox + x, oy + y, w, h);
+  };
+
+  const clear = () => {
+    ctx.clearRect(ox, oy, HERO_KNIGHT_TEXTURE.frameWidth, HERO_KNIGHT_TEXTURE.frameHeight);
+  };
+
+  clear();
+
+  const legOffsetL = frame === 1 ? -1 : frame === 2 ? 1 : 0;
+  const legOffsetR = frame === 1 ? 1 : frame === 2 ? -1 : 0;
+  const capeShift = frame === 1 ? -1 : frame === 2 ? 1 : frame === 4 ? -2 : 0;
+
+  // Cape (behind armor)
+  px(8 + capeShift, 17, 2, 14, '#5b1c1c');
+  px(10 + capeShift, 19, 2, 12, '#782828');
+  px(12 + capeShift, 20, 1, 10, '#8f3333');
+
+  // Legs
+  px(13 + legOffsetL, 29, 3, 8, '#474f5e');
+  px(17 + legOffsetR, 29, 3, 8, '#474f5e');
+  px(12 + legOffsetL, 36, 4, 2, '#2a2f39');
+  px(17 + legOffsetR, 36, 4, 2, '#2a2f39');
+
+  // Torso and pauldrons
+  px(11, 16, 10, 13, '#4f5a6d');
+  px(10, 17, 1, 8, '#6a7488');
+  px(21, 17, 1, 8, '#6a7488');
+  px(10, 16, 3, 3, '#8f9ab1');
+  px(19, 16, 3, 3, '#8f9ab1');
+
+  // Helmet + visor glow
+  px(12, 8, 8, 8, '#8791a8');
+  px(13, 9, 6, 2, '#aeb6c8');
+  px(13, 12, 6, 3, '#2e3442');
+  px(14, 13, 2, 1, '#7aa3ff');
+  px(17, 13, 2, 1, '#7aa3ff');
+
+  // Left arm + shield
+  px(8, 18, 3, 8, '#4f5a6d');
+  px(5, 19, 3, 9, '#6f778b');
+  px(6, 21, 1, 4, '#9da7bc');
+
+  // Right arm + sword by frame
+  if (frame <= 2 || frame === 5) {
+    px(21, 18, 3, 8, '#4f5a6d');
+    px(24, 16, 2, 11, '#8e98ad');
+    px(24, 14, 2, 2, '#b6c0d3');
+  } else if (frame === 3) {
+    // wind-up
+    px(20, 17, 4, 4, '#4f5a6d');
+    px(23, 12, 2, 8, '#8e98ad');
+    px(23, 10, 2, 2, '#b6c0d3');
+  } else {
+    // slash frame
+    px(21, 20, 4, 4, '#4f5a6d');
+    px(24, 20, 7, 2, '#aeb6c8');
+    px(30, 19, 2, 4, '#d4dbe8');
+    px(29, 18, 1, 1, '#d4dbe8');
+    px(29, 23, 1, 1, '#d4dbe8');
+  }
+
+  // Small armor highlights
+  px(14, 20, 1, 1, '#c7cfde');
+  px(17, 23, 1, 1, '#c7cfde');
+}
+
 // ── Unit class ────────────────────────────────────────────────────────────────
 class Unit {
   constructor(scene, x, y, cfg, isPlayer) {
@@ -200,28 +303,61 @@ class Hero {
     this.healCooldown          = 0;
 
     this.attackTimer = 0;
+    this.attackAnimLock = 0;
     this.state       = UnitState.MOVING;
     this.target      = null;
 
-    this.gfx    = scene.add.graphics();
+    ensureHeroKnightTexture(scene);
+    this._ensureAnimations();
+
+    this.sprite = scene.add
+      .sprite(this.x, this.y, HERO_KNIGHT_TEXTURE.key, 'f0')
+      .setOrigin(0.5, 1)
+      .setScale(HERO_KNIGHT_TEXTURE.scale);
+
     this.hpBar  = scene.add.graphics();
-    this._draw();
+    this._drawHpBar();
   }
 
-  _draw() {
-    const w = GlobalConfig.HERO.width, h = GlobalConfig.HERO.height;
-    this.gfx.clear();
-    // Body
-    this.gfx.fillStyle(GlobalConfig.HERO.color, 1);
-    this.gfx.fillRect(-w / 2, -h, w, h);
-    // Cape detail
-    this.gfx.fillStyle(0xff4400, 0.8);
-    this.gfx.fillTriangle(-w / 2 - 4, -h * 0.3, -w / 2 - 4, -h + 4, w / 2, -h * 0.5);
-    this.gfx.lineStyle(2, 0xffffff, 1);
-    this.gfx.strokeRect(-w / 2, -h, w, h);
-    this.gfx.x = this.x;
-    this.gfx.y = this.y;
-    this._drawHpBar();
+  _ensureAnimations() {
+    const anims = this.scene.anims;
+
+    if (!anims.exists('hero-knight-walk')) {
+      anims.create({
+        key: 'hero-knight-walk',
+        frames: [
+          { key: HERO_KNIGHT_TEXTURE.key, frame: 'f1' },
+          { key: HERO_KNIGHT_TEXTURE.key, frame: 'f0' },
+          { key: HERO_KNIGHT_TEXTURE.key, frame: 'f2' },
+          { key: HERO_KNIGHT_TEXTURE.key, frame: 'f0' },
+        ],
+        frameRate: 7,
+        repeat: -1,
+      });
+    }
+
+    if (!anims.exists('hero-knight-attack')) {
+      anims.create({
+        key: 'hero-knight-attack',
+        frames: [
+          { key: HERO_KNIGHT_TEXTURE.key, frame: 'f3' },
+          { key: HERO_KNIGHT_TEXTURE.key, frame: 'f4' },
+          { key: HERO_KNIGHT_TEXTURE.key, frame: 'f5' },
+        ],
+        frameRate: 12,
+        repeat: 0,
+      });
+    }
+  }
+
+  _playAttackAnimation() {
+    this.attackAnimLock = 0.26;
+    this.sprite.play('hero-knight-attack', true);
+  }
+
+  _setIdleFrame() {
+    this.sprite.stop();
+    this.sprite.setFrame('f0');
   }
 
   _drawHpBar() {
@@ -245,6 +381,12 @@ class Hero {
   takeDamage(amount) {
     this.hp -= amount;
     if (this.hp <= 0) this.hp = 0;
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: 0.45,
+      duration: 70,
+      yoyo: true,
+    });
     this._drawHpBar();
   }
 
@@ -253,6 +395,7 @@ class Hero {
     if (this.mana < ab.manaCost || this.arrowRainCooldown > 0) return false;
     this.mana            -= ab.manaCost;
     this.arrowRainCooldown = this.arrowRainCooldownMax;
+    this._playAttackAnimation();
 
     // Visual
     const g = this.scene.add.graphics();
@@ -287,6 +430,7 @@ class Hero {
     if (this.mana < ab.manaCost || this.healCooldown > 0) return false;
     this.mana       -= ab.manaCost;
     this.healCooldown = this.healCooldownMax;
+    this._playAttackAnimation();
 
     // Visual
     const g = this.scene.add.graphics();
@@ -319,6 +463,7 @@ class Hero {
     this.arrowRainCooldown = Math.max(0, this.arrowRainCooldown - dt * 1000);
     this.healCooldown      = Math.max(0, this.healCooldown      - dt * 1000);
     this.attackTimer       = Math.max(0, this.attackTimer       - dt);
+    this.attackAnimLock    = Math.max(0, this.attackAnimLock    - dt);
 
     // Auto-attack nearest enemy in range
     let nearest = null, nearestDist = Infinity;
@@ -332,20 +477,31 @@ class Hero {
     if (nearest && this.attackTimer <= 0) {
       nearest.takeDamage(this.damage);
       this.attackTimer = 1 / this.attackRate;
+      this._playAttackAnimation();
     }
 
     // Movement toward targetX
     const dx = this.targetX - this.x;
     if (Math.abs(dx) > 3 && !nearest) {
-      this.x += Math.sign(dx) * this.speed * dt;
+      const dir = Math.sign(dx);
+      this.x += dir * this.speed * dt;
+      if (dir !== 0) this.sprite.setFlipX(dir < 0);
+      if (this.attackAnimLock <= 0 && this.sprite.anims.currentAnim?.key !== 'hero-knight-walk') {
+        this.sprite.play('hero-knight-walk', true);
+      }
+    } else if (nearest) {
+      this.sprite.setFlipX(nearest.x < this.x);
+      if (this.attackAnimLock <= 0) this._setIdleFrame();
+    } else if (this.attackAnimLock <= 0) {
+      this._setIdleFrame();
     }
 
-    this.gfx.x   = this.x;
+    this.sprite.x = this.x;
     this.hpBar.x = this.x;
   }
 
   destroy() {
-    this.gfx.destroy();
+    this.sprite.destroy();
     this.hpBar.destroy();
   }
 }
